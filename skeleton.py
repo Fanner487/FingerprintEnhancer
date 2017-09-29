@@ -1,3 +1,7 @@
+# http://opencvpython.blogspot.ie/2012/05/skeletonization-using-opencv-python.html
+# results aren't too good
+# commit changes god damn it
+
 import cv2
 import numpy as np
  
