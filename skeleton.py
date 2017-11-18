@@ -1,84 +1,169 @@
+# Contributors: 
+# - Oleg Petcov C14399846
+# - Cliona Rogers C14396346
+# - Eamon Tang C14383761
+
+# Procedure:
+# - 
+
 import cv2
 import numpy as np
+
+# The whole process and sequence of functions called to
+# extract and clean up the skeleton of the fingerprint
+def process(image):
+
+	# blur and enhance the blackness of the original fingerprint image
+	bilateral_filtered = filter_bilateral(image)
+	contrast_enhanced = contrast_enhance(bilateral_filtered)
+	
+	# get binary mask of threshold
+	threshold = apply_threshold(contrast_enhanced)
+	
+	# reduce noise and blur artefects left from denoising 
+	denoised = denoise(threshold)
+	gaussian_blurred = blur(denoised)
+
+	# invert the binary image so the skeletonisation algorithm works
+	# on the lines of the fingerprint, not the spaces between them
+	inverted = invert_image(gaussian_blurred)
+	
+	skeleton = skeletonise(inverted)
+	
+	# Put the fingerprint back onto a white background
+	skeleton_inverted = invert_image(skeleton)
+
+	# Last step touching up
+	skeleton_inverted_denoised = denoise(skeleton_inverted)
+
+	# # Show images from every step
+	# cv2.imshow("bilateral_filtered", bilateral_filtered)
+	# cv2.imshow("contrast_enhanced", contrast_enhanced)
+	# cv2.imshow("threshold", threshold)
+	# cv2.imshow("denoised", denoised)
+	# cv2.imshow("gaussian_blurred", gaussian_blurred)
+	# cv2.imshow("inverted", inverted)
+	# cv2.imshow("skeleton", skeleton)
+	# cv2.imshow("skeleton_inverted", skeleton_inverted)
+	# cv2.imshow("skeleton_inverted_denoised", skeleton_inverted_denoised)
+	# cv2.waitKey(0)
+	# cv2.destroyAllWindows()
+
+
+	return skeleton_inverted_denoised
+
+
+def skeletonise(image):
+
+	element = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
+	size = np.size(image)
+
+	# A blank image the size of the original image
+	skeleton = np.zeros(image.shape, np.uint8)
+	done = False
+	
+	while( not done):
+	
+		eroded = cv2.erode(image, element)
+		dilated = cv2.dilate(eroded, element)
+		
+		# get the difference from erosion/dilation process from the original image arrays
+		subtracted = cv2.subtract(image, dilated)
+
+		# Adds the processed image to skeleton image
+		skeleton = cv2.bitwise_or(skeleton, subtracted)
+
+		image = eroded.copy()
+
+		zeros = size - cv2.countNonZero(image)
+
+		# Checks to see if the fingerprint is one pixel wide, I think?
+		if zeros == size:
+
+			done = True
+
+	return skeleton
+
+
+# Inverts a whole greyscale image between black and white
+def invert_image(image):
+
+	result = cv2.bitwise_not(image)
+
+	return result
+
+
+# Using Contrast Limited Adaptive Histogram Equalisation to darken image
+def contrast_enhance(image):
+
+	clip_limit = 2.0
+	tile_grid_size = (8,8)
+	clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
+	
+	result = clahe.apply(image)
+	
+	return result
+
+
+# Adaptive threshold
+def apply_threshold(image):
+
+	max_value = 255
+	block_size = 15
+	constant = 5
+
+	result = cv2.adaptiveThreshold(image, maxValue = max_value, adaptiveMethod = cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+		thresholdType = cv2.THRESH_BINARY, blockSize = block_size, C = constant)
+
+	return result
+
+# Using Fast Non-Local Means Deniosing
+def denoise(image):
+
+	h = 10
+	search_window = 21
+	block_size = 7
+
+	result = cv2.fastNlMeansDenoising(image, None, h, block_size, search_window)
+
+	return result
+
+
+# Using Gaussian Blur
+def blur(image):
+
+	block_size = (5,5)
+
+	result = cv2.GaussianBlur(image, block_size, 0)
+
+	return result
+
+
+# Using a bilateral filter
+def filter_bilateral(image):
+
+	diameter = 11
+	sigma_colour = 17
+	sigma_space = 17
+
+	result = cv2.bilateralFilter(image, diameter, sigma_colour, sigma_space)
+
+	return result
+
+
+# End methods
+
 
 # The second parameter loads the image in as GREYSCALE without doing all that codey stuff
 image = cv2.imread("fingerprint.jpg", 0)
 original = image
 
-# image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-size = np.size(image)
-skeleton = np.zeros(image.shape, np.uint8)
+processed = process(image)
 
-clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+cv2.imshow("origina", original)
+cv2.imshow("skeleton", processed)
 
-
-image = cv2.bilateralFilter(image, 11, 17, 17)
-
-image = clahe.apply(image)
-
-cv2.imshow("clahe", image)
-
-
-image = cv2.adaptiveThreshold(image, maxValue = 255, adaptiveMethod = cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-	thresholdType = cv2.THRESH_BINARY, blockSize = 15, C = 5)
-
-cv2.imshow("Threshedimage", image)
-	
-# algorithm eroded and dilated the white space in between each line(?) of the fingerprint
-# invert the image to make it work with the print
-denoise = cv2.fastNlMeansDenoising(image,None,10,7,21)
-blurGaus = cv2.GaussianBlur(denoise,(5,5),0)
-
-cv2.imshow("blurGaus", blurGaus)
-
-#image = cv2.filter2D(blurGaus,-1,kernel)
-image = cv2.bitwise_not(blurGaus)
-
-cv2.imshow("image", image)
-
-# 3,3 works the best apparently
-element = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
-
-done = False
-
-cv2.imshow("image", image)
-
-while( not done):
-
-	# this does magical things
-	eroded = cv2.erode(image, element)
-	temp = cv2.dilate(eroded, element)
-	
-	temp = cv2.subtract(image, temp)
-	skeleton = cv2.bitwise_or(skeleton, temp)
-	image = eroded.copy()
-
-	zeros = size - cv2.countNonZero(image)
-
-	if zeros == size:
-
-		done = True
-
-# inverts the colour
-
-# More denoising to get rid of aliasing
-skeleton = cv2.fastNlMeansDenoising(skeleton,None,10,7,21)
-
-'''
-thresh = cv2.adaptiveThreshold(skeleton, maxValue = 255, adaptiveMethod = cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-	thresholdType = cv2.THRESH_BINARY, blockSize = 15, C = 5)
-	
-	
-cv2.imshow("thresh", thresh)
-'''
-
-skeleton_inverted = cv2.bitwise_not(skeleton)
-
-
-cv2.imshow("original", original)
-cv2.imshow("skeleton", skeleton_inverted)
-
-cv2.imwrite("ShinyFingeres.jpg", skeleton_inverted)
+cv2.imwrite("ShinyFingeres.jpg", processed)
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
