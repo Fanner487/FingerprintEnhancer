@@ -8,6 +8,7 @@
 
 import cv2
 import numpy as np
+import easygui
 
 # The whole process and sequence of functions called to
 # extract and clean up the skeleton of the fingerprint
@@ -153,17 +154,20 @@ def filter_bilateral(image):
 
 # End methods
 
-
+file = easygui.fileopenbox()
 # The second parameter loads the image in as GREYSCALE without doing all that codey stuff
-image = cv2.imread("fingerprint.jpg", 0)
+image = cv2.imread(file, 0)
 original = image
 
 processed = process(image)
 
-cv2.imshow("origina", original)
+cv2.imshow("original", original)
 cv2.imshow("skeleton", processed)
 
-cv2.imwrite("ShinyFingeres.jpg", processed)
+# Final blur to get rid of weird line-edge 'fluff'
+processed = filter_bilateral(processed)
+
+cv2.imwrite("ShinyFingers.jpg", processed)
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
