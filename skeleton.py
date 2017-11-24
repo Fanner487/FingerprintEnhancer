@@ -4,7 +4,17 @@
 # - Eamon Tang C14383761
 
 # Procedure:
-# - 
+# - Apply bilateral filter 
+# - Enhance contrast (enhance the lighter areas of the image) 
+# - Apply adaptive threshold (get binary mask of fingerprint)
+# - Denoise (reduce some noise)
+# - Apply Gaussian blur	
+# - Invert image colour (so skeletonisation algorithm can work on correct part of fingerprint)
+# - Skeletonise
+# - Invert image colour (put black fingerprint on white background)
+# - Denoise (last steps of cleaning up)
+# - Apply bilateral filter
+
 
 import cv2
 import numpy as np
@@ -34,8 +44,11 @@ def process(image):
 	# Put the fingerprint back onto a white background
 	skeleton_inverted = invert_image(skeleton)
 
-	# Last step touching up
+	# Last step touching up and blurring
 	skeleton_inverted_denoised = denoise(skeleton_inverted)
+
+	skeleton_inverted_bilateral_filter = filter_bilateral(skeleton_inverted_denoised)
+
 
 	# # Show images from every step
 	# cv2.imshow("bilateral_filtered", bilateral_filtered)
@@ -47,13 +60,16 @@ def process(image):
 	# cv2.imshow("skeleton", skeleton)
 	# cv2.imshow("skeleton_inverted", skeleton_inverted)
 	# cv2.imshow("skeleton_inverted_denoised", skeleton_inverted_denoised)
+	# cv2.imshow("skeleton_inverted_bilateral_filter", skeleton_inverted_bilateral_filter)
 	# cv2.waitKey(0)
 	# cv2.destroyAllWindows()
 
 
-	return skeleton_inverted_denoised
+	return skeleton_inverted_bilateral_filter
 
 
+# Skeletonisation snippet code:
+# Rahman K, Abid, 24/11/2017, Skeletonization using OpenCV-Python, http://opencvpython.blogspot.ie/2012/05/skeletonization-using-opencv-python.html
 def skeletonise(image):
 
 	element = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
@@ -164,8 +180,6 @@ processed = process(image)
 cv2.imshow("original", original)
 cv2.imshow("skeleton", processed)
 
-# Final blur to get rid of weird line-edge 'fluff'
-processed = filter_bilateral(processed)
 
 cv2.imwrite("ShinyFingers.jpg", processed)
 
